@@ -3,11 +3,16 @@
 from flask import Flask, jsonify, abort, make_response, request
 import model as M
 import numpy as np
+import yaml
+
+with open("configs/model_config.yaml") as file:
+    config = yaml.load(file, Loader=yaml.Loader)
+
+model = M.load_model(config["model_name"])
+targets = ['setosa', 'versicolor', 'virginica']
+feature_names = config["feature_names"]
 
 app = Flask(__name__)
-
-model = M.load_model()
-targets = ['setosa', 'versicolor', 'virginica']
 
 def get_pred(data):
     result = model.predict_proba(data)
@@ -18,47 +23,47 @@ def get_pred(data):
 @app.route('/iris/api/v1.0/form_tabular/pred', methods=['GET', 'POST'])
 def get_form_tabular_task():
     if request.method == 'POST':
-        sepal_length = float(request.form.get('sepal length'))
-        sepal_width = float(request.form.get('sepal width'))
-        petal_length = float(request.form.get('petal length'))
-        petal_width = float(request.form.get('petal width'))
-        data = np.array([[sepal_length, sepal_width, petal_length, petal_width]])
+        data = []
+        for feature in feature_names:
+            data.append(float(request.form.get(feature)))
+        data = np.array([data])
         pred_target, prob_target = get_pred(data)
         return '''
                   <h1>With a probability of {}%, this flower is iris {}</h1>
                '''.format(prob_target * 100, pred_target)
-    return '''
-              <form method="POST">
-                  <h1>Please enter iris parameters:</h1>
-                  <div><label>sepal length: <input type="number" step=0.01 name="sepal length"></label></div>
-                  <div><label>sepal width: <input type="number" step=0.01 name="sepal width"></label></div>
-                  <div><label>petal length: <input type="number" step=0.01 name="petal length"></label></div>
-                  <div><label>petal width: <input type="number" step=0.01 name="petal width"></label></div>
-                  <input type="submit" value="Submit">
-              </form>'''
+    else:
+        get_request_1 = '''
+            <form method="POST">
+                <h1>Please enter iris parameters:</h1>
+        '''
+        get_request_2 = "".join(
+            [f'<div><label>{feature}: <input type="number" step=0.01 name="{feature}"></label></div>'
+             for feature in feature_names]
+        )
+        get_request_3 = '''
+            <input type="submit" value="Submit">
+            </form>
+        '''
+        return "".join([get_request_1, get_request_2, get_request_3])
 
 @app.route('/iris/api/v1.0/json_tabular/pred', methods=['POST'])
 def get_json_tabular_task():
-    if request.method == 'POST':
-        request_data = request.get_json()
-        sepal_length = float(request_data.get('sepal length'))
-        sepal_width = float(request_data.get('sepal width'))
-        petal_length = float(request_data.get('petal length'))
-        petal_width = float(request_data.get('petal width'))
-        data = np.array([[sepal_length, sepal_width, petal_length, petal_width]])
-        pred_target, prob_target = get_pred(data)
-        return '''
-                  <h1>With a probability of {}%, this flower is iris {}</h1>
-               '''.format(prob_target * 100, pred_target)
+    request_data = request.get_json()
+    data = []
+    for feature in feature_names:
+        data.append(float(request_data.get(feature)))
+    data = np.array([data])
+    pred_target, prob_target = get_pred(data)
+    return '''
+              <h1>With a probability of {}%, this flower is iris {}</h1>
+           '''.format(prob_target * 100, pred_target)
 
 @app.route('/iris/api/v1.0/tabular/pred', methods=['GET'])
 def get_tabular_task():
-    data = np.array(
-        [[request.args.get('sepal_length'),
-          request.args.get('sepal_width'),
-          request.args.get('petal_length'),
-          request.args.get('petal_width')]]
-    )
+    data = []
+    for feature in feature_names:
+        data.append(request.args.get(feature))
+    data = np.array([data])
     pred_target, prob_target = get_pred(data)
     return '''
               <h1>With a probability of {}%, this flower is iris {}</h1>
@@ -74,4 +79,4 @@ def server_error(error):
 
 
 if __name__ == '__main__':
-    app.run(port=5000, debug=True)
+    app.run(port=config["port"], debug=True)
